@@ -2,7 +2,7 @@
 
 **Welcome to KAT!**
 
-kat.py is an incredibly simple Python wrapper over the search KAT functionality. The code was originally taken from [KickassTorrentsAPI](https://github.com/stephan-mclean/KickassTorrentsAPI) however, there hasn't been much activity for almost a year and some basic features weren't working due to changes to the KAT website. In addition, the interface felt a bit clunky to use.
+kat.py is an incredibly simple Python wrapper over the KAT search functionality. The code was originally taken from [KickassTorrentsAPI](https://github.com/stephan-mclean/KickassTorrentsAPI) however, there hasn't been much activity for almost a year and some basic features weren't working due to changes to the KAT website. In addition, the interface felt a bit clunky to use.
 
 kat.py uses BeautifulSoup to scrape data from `https://kat.cr/usearch/<query>/` to extract fields such as as title, file size, number of files, magnet and torrent URLs along with many other fields.
 
@@ -59,4 +59,4 @@ This is currently the interface however it is subject to change.
 
 ## License
 
-MIT
+[MIT](LICENSE.md)

@@ -128,12 +128,11 @@ class Search(object):
     def search(self, term=None, category=None, pages=1, url=SEARCH_URL,
                sort=None, order=None):
         """Given a `term` search for matching torrents on KAT."""
-
         if not self.current_url:
             self.current_url = url
 
+        # Searching home page so no formatting.
         if self.current_url == BASE_URL:
-            # Searching home page so no formatting
             results = self._get_results(self.current_url)
             self._add_results(results)
         else:
@@ -141,7 +140,7 @@ class Search(object):
             sorting = self._format_sort(sort, order)
 
             # Now get the results.
-            for i in range(pages):
+            for i in xrange(pages):
                 results = self._get_results(
                     search + '/' + str(self._current_page) + '/' + sorting
                 )
@@ -161,9 +160,10 @@ class Search(object):
             self._categorize(category)
 
     def _categorize(self, category):
-        """Remove torrents with unwanted category from self.torrents."""
+        """Remove torrents with unwanted category from `self.torrents`."""
         self.torrents = [
-            result for result in self.torrents if result.category == category]
+            result for result in self.torrents if result.category == category
+        ]
 
     def _format_sort(self, sort, order):
         sorting = ''
@@ -211,7 +211,7 @@ class Search(object):
         soup = _get_soup(page)
         details = soup.find_all('tr', class_='odd')
         even = soup.find_all('tr', class_='even')
-        for i in range(len(even)):  # Join the results.
+        for i in xrange(len(even)):  # Join the results.
             details.insert((i * 2) + 1, even[i])
         return self._parse_details(details)
 
