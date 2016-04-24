@@ -8,19 +8,6 @@ import StringIO
 BASE_URL = 'https://kat.cr/'
 
 
-def _get_soup(url):
-    """Returns the BeautifulSoup object for given url."""
-    response = urllib2.urlopen(url)
-    response_data = response.read()
-    try:
-        compressed = StringIO.StringIO(response_data)
-        gzipper = gzip.GzipFile(fileobj=compressed)
-        response_data = gzipper.read()
-    except IOError:
-        pass  # The response was not gzipped.
-    return bs4.BeautifulSoup(response_data)
-
-
 class Category(object):
     ALL = 'all'
     MOVIES = 'movies'
@@ -46,185 +33,73 @@ class SortOrder(object):
     DESC = 'desc'
 
 
-class Torrent(object):
-    """Represents a torrent as found in KAT search results."""
-
-    def __init__(self, title, category, link, size, seed, leech, magnet,
-                 download, files, age, is_verified):
-        self.title = title
-        self.category = category
-        self.page = BASE_URL[:-1] + link
-        self.size = size
-        self.seeders = seed
-        self.leechers = leech
-        self._magnet = magnet
-        self._download = download
-        self.files = files
-        self.age = age
-        self._data = None  # bs4 html for getting download & magnet
-        self.is_verified = is_verified
-
-    def print_details(self):
-        """Print torrent details."""
-        print 'Title:', self.title
-        print 'Category:', self.category
-        print 'Page:', self.page
-        print 'Size:', self.size
-        print 'Files:', self.files
-        print 'Age:', self.age
-        print 'Seeds:', self.seeders
-        print 'Leechers:', self.leechers
-        print 'Verified:', self.is_verified
-        print 'Magnet:', self.magnet
-        print 'Download:', self.download
-
-    @property
-    def download(self):
-        if self._download:
-            return self._download
-
-        if self._data:
-            self._download = self._data.find(
-                'a', class_='siteButton giantButton verifTorrentButton'
-            ).get('href')
-            return self._download
-
-        # No data. Parse torrent page
-        soup = _get_soup(self.page)
-        self._download = soup.find(
-            'a', class_='siteButton giantButton verifTorrentButton'
-        ).get('href')
-        self._data = soup
-        return self._download
-
-    @property
-    def magnet(self):
-        if self._magnet:
-            return self._magnet
-        if self._data:
-            self._magnet = self._data.find(
-                'a', class_='siteButton giantIcon magnetlinkButton'
-            ).get('href')
-            return self._magnet
-
-        soup = _get_soup(self.page)
-        self._magnet = soup.find(
-            'a', class_='siteButton giantIcon magnetlinkButton'
-        ).get('href')
-        self._data = soup
-        return self._magnet
-
-
-class Search(object):
+class Request(object):
     """Abstracts the process of searching for torrents on KAT.
 
     Search results are then stored within Search instances in a Torrent
     abstraction.
 
     """
-    SEARCH_URL = BASE_URL + 'usearch/'
-    LATEST_URL = BASE_URL + 'new'
-
-    def __init__(self):
+    def __init__(self, base_url=BASE_URL):
         self.torrents = []
-        self._current_page = 1
+        self.search_url = base_url + 'usearch/'
+
         self.term = None
         self.category = None
         self.order = None
         self.sort = None
-        self.current_url = None
 
-    def search(self, term=None, category=None, pages=1, url=SEARCH_URL,
-               sort=None, order=None):
+    def search(self, term=None, category=None, pages=1, sort=None, order=None):
         """Given a `term` search for matching torrents on KAT."""
-        if not self.current_url:
-            self.current_url = url
+        search_url = self.get_search_url(term, category)
+        sort_url = self.get_sort_url(sort, order)
+        for p in xrange(1, pages + 1):
+            for item in self.get_results('%s/%s/%s' % (search_url, p, sort_url)):
+                self.torrents.append(item)
+        return self.torrents
 
-        # Searching home page so no formatting.
-        if self.current_url == BASE_URL:
-            results = self._get_results(self.current_url)
-            self._add_results(results)
-        else:
-            search = self._format_search(term, category)
-            sorting = self._format_sort(sort, order)
+    def request_page(self, url):
+        """Returns the BeautifulSoup object for given url."""
+        response = urllib2.urlopen(url)
+        response_data = response.read()
+        try:
+            compressed = StringIO.StringIO(response_data)
+            gzipper = gzip.GzipFile(fileobj=compressed)
+            response_data = gzipper.read()
+        except IOError:
+            pass  # The response was not gzipped.
+        return bs4.BeautifulSoup(response_data)
 
-            # Now get the results.
-            for i in xrange(pages):
-                results = self._get_results(
-                    search + '/' + str(self._current_page) + '/' + sorting
-                )
-                self._add_results(results)
-                self._current_page += 1
-            self._current_page -= 1
+    def get_sort_url(self, sort, order=SortOrder.DESC):
+        if not sort:
+            return ''
+        self.order, self.sort = order, sort
+        return '?field=%s&sorder=%s' % (self.sort, self.order)
 
-    def popular(self, category, sort_option='title'):
-        self.search(url=BASE_URL)
-        if category:
-            self._categorize(category)
-        self.torrents.sort(key=lambda t: t.__getattribute__(sort_option))
-
-    def recent(self, category, pages, sort, order):
-        self.search(pages=pages, url=self.LATEST_URL, sort=sort, order=order)
-        if category:
-            self._categorize(category)
-
-    def _categorize(self, category):
-        """Remove torrents with unwanted category from `self.torrents`."""
-        self.torrents = [
-            result for result in self.torrents if result.category == category
-        ]
-
-    def _format_sort(self, sort, order):
-        sorting = ''
-        if sort:
-            self.sort = sort
-            sorting = '?field=' + self.sort
-            if order:
-                self.order = order
-            else:
-                self.order = SortOrder.DESC
-            sorting = sorting + '&sorder=' + self.order
-        return sorting
-
-    def _format_search(self, term, category):
-        search = self.current_url
-        if term:
-            self.term = term
-            search = self.current_url + term
+    def get_search_url(self, term, category):
+        self.term = term
+        search_url = self.search_url
+        search_url = self.search_url + self.term
         if category:
             self.category = category
-            search = search + ' category:' + category
-        return search
+            search_url += ' category:' + self.category
+        return search_url
 
-    def page(self, i):
-        """Get the ith page in the search result using the previously used term."""
-        self.torrents = []
-        self._current_page = i
-
-        self.search(
-            term=self.term,
-            category=self.category,
-            sort=self.sort,
-            order=self.order,
-        )
-
-    def next_page(self):
-        self.page(self._current_page + 1)
-
-    def _get_results(self, page):
+    def get_results(self, page_url):
         """
         Find every div tag containing torrent details on given page,
         then parse the results into a list of Torrents and return them.
 
         """
-        soup = _get_soup(page)
-        details = soup.find_all('tr', class_='odd')
-        even = soup.find_all('tr', class_='even')
-        for i in xrange(len(even)):  # Join the results.
-            details.insert((i * 2) + 1, even[i])
-        return self._parse_details(details)
+        response = self.request_page(page_url)
+        details = response.find_all('tr', class_='odd')
+        even = response.find_all('tr', class_='even')
 
-    def _parse_details(self, tag_list):
+        for i in xrange(len(even)):
+            details.insert((i * 2) + 1, even[i])
+        return self.parse_details(details)
+
+    def parse_details(self, tag_list):
         """
         Given a list of tags from either a search page or the KAT home page,
         parse the details and return a list of Torrent objects.
@@ -233,48 +108,29 @@ class Search(object):
         results = []
         for i, item in enumerate(tag_list):
             title = item.find('a', class_='cellMainLink')
-            title_text = title.text
-            link = title.get('href')
-
             tds = item.find_all('td', class_='center')
-            size = tds[0].text
-            files = tds[1].text
-            age = tds[2].text
-            seed = tds[3].text
-            leech = tds[4].text
+            category = self.get_torrent_category(item)
 
-            download = item.find('a', title='Verified Torrent')
-            magnet = item.find('a', title='Torrent magnet link')
+            download_url = item.find('a', title='Verified Torrent').get('href')
+            magnet_url = item.find('a', title='Torrent magnet link').get('href')
             is_verified = item.find('a', title='Download torrent file') is not None
 
-            # Home page doesn't have magnet or download links.
-            if magnet:
-                magnet = magnet.get('href')
-            if download:
-                download = download.get('href')
-
-            # Get category changes if we're parsing home vs. search page.
-            if self.current_url == BASE_URL:
-                category = self._get_torrent_category(item, result=i)
-            else:
-                category = self._get_torrent_category(item)
-            torrent = Torrent(
-                title_text,
-                category,
-                link,
-                size,
-                seed,
-                leech,
-                magnet,
-                download,
-                files,
-                age,
-                is_verified,
-            )
-            results.append(torrent)
+            results.append({
+                'title': title.text,
+                'url': BASE_URL[:-1] + title.get('href'),
+                'size': tds[0].text,
+                'files': tds[1].text,
+                'age': tds[2].text,
+                'seed': tds[3].text,
+                'leech': tds[4].text,
+                'category': category,
+                'is_verified': is_verified,
+                'download_url': download_url,
+                'magnet_url': magnet_url,
+            })
         return results
 
-    def _get_torrent_category(self, tag, result=None):
+    def get_torrent_category(self, tag, result=None):
         """Extract the category from `tag`.
 
         The search page has the torrent category in the url <a href='/tv/'>TV</a>.
@@ -282,25 +138,13 @@ class Search(object):
         decide on the torrent category.
 
         """
-        hrefs, category = [
+        categories = [
             'movies', 'tv', 'music', 'games', 'applications', 'anime', 'books', 'xxx',
-        ], None
-
-        # Searching home page, get category from result number.
-        if result:  # if result: 0 returns false.
-            return hrefs[result / 10]
-        for href in hrefs:
-            if tag.select('a[href=/%s/]' % href):
-                return href
+        ]
+        for category in categories:
+            if tag.select('a[href=/%s/]' % category):
+                return category
         return None
-
-    def _add_results(self, results):
-        for item in results:
-            self.torrents.append(item)
-
-    @property
-    def current_page(self):
-        return self._current_page
 
     def __iter__(self):
         return iter(self.torrents)
@@ -318,28 +162,6 @@ def search(term, category=Category.ALL, pages=1, sort=None, order=None):
     Search results can sorted and span multiple pages.
 
     """
-    s = Search()
-    s.search(term=term, category=category, pages=pages, sort=sort, order=order)
-    return s
-
-
-def popular(category=None, sortOption='title'):
-    """Returns the torrents appearing on the KAT home page.
-
-    Torrents can be categorized but thye cannot be sorted or contain multiple pages.
-
-    """
-    s = Search()
-    s.popular(category, sortOption)
-    return s
-
-
-def recent(category=None, pages=1, sort=None, order=None):
-    """Returns the most recently added torrents.
-
-    Torrents can be sorted, categorized, and contain multiple pages.
-
-    """
-    s = Search()
-    s.recent(category, pages, sort, order)
-    return s
+    request = Request()
+    request.search(term=term, category=category, pages=pages, sort=sort, order=order)
+    return request
