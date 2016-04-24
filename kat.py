@@ -54,8 +54,8 @@ class Request(object):
         search_url = self.get_search_url(term, category)
         sort_url = self.get_sort_url(sort, order)
         for p in xrange(1, pages + 1):
-            for item in self.get_results('%s/%s/%s' % (search_url, p, sort_url)):
-                self.torrents.append(item)
+            endpoint = '%s/%s/%s' % (search_url, p, sort_url)
+            self.torrents += self.get_torrents(endpoint)
         return self.torrents
 
     def request_page(self, url):
@@ -85,28 +85,18 @@ class Request(object):
             search_url += ' category:' + self.category
         return search_url
 
-    def get_results(self, page_url):
-        """
-        Find every div tag containing torrent details on given page,
-        then parse the results into a list of Torrents and return them.
+    def get_torrents(self, page_url):
+        """Retrieve torrent results from the search page.
+
+        Iterates over all table row elements, parses each row and returns
+        the each torrent's details as list of dictionaries.
 
         """
         response = self.request_page(page_url)
-        details = response.find_all('tr', class_='odd')
-        even = response.find_all('tr', class_='even')
+        torrents = response.find_all('tr', class_=['even', 'odd'])
 
-        for i in xrange(len(even)):
-            details.insert((i * 2) + 1, even[i])
-        return self.parse_details(details)
-
-    def parse_details(self, tag_list):
-        """
-        Given a list of tags from either a search page or the KAT home page,
-        parse the details and return a list of Torrent objects.
-
-        """
         results = []
-        for i, item in enumerate(tag_list):
+        for i, item in enumerate(torrents):
             title = item.find('a', class_='cellMainLink')
             tds = item.find_all('td', class_='center')
             category = self.get_torrent_category(item)
