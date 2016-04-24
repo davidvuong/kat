@@ -28,31 +28,20 @@ class SortType(object):
     LEECH = 'leechers'
 
 
-class SortOrder(object):
-    ASC = 'asc'
-    DESC = 'desc'
-
-
 class Request(object):
-    """Abstracts the process of searching for torrents on KAT.
-
-    Search results are then stored within Search instances in a Torrent
-    abstraction.
-
-    """
+    """Abstracts the process of searching for torrents on KAT."""
     def __init__(self, base_url=BASE_URL):
         self.torrents = []
         self.search_url = base_url + 'usearch/'
 
         self.term = None
         self.category = None
-        self.order = None
         self.sort = None
 
-    def search(self, term=None, category=None, pages=1, sort=None, order=None):
+    def search(self, term, category, pages, sort, desc):
         """Given a `term` search for matching torrents on KAT."""
         search_url = self.get_search_url(term, category)
-        sort_url = self.get_sort_url(sort, order)
+        sort_url = self.get_sort_url(sort, desc)
         for p in xrange(1, pages + 1):
             endpoint = '%s/%s/%s' % (search_url, p, sort_url)
             self.torrents += self.get_torrents(endpoint)
@@ -70,15 +59,14 @@ class Request(object):
             pass  # The response was not gzipped.
         return bs4.BeautifulSoup(response_data)
 
-    def get_sort_url(self, sort, order=SortOrder.DESC):
+    def get_sort_url(self, sort, desc):
         if not sort:
             return ''
-        self.order, self.sort = order, sort
-        return '?field=%s&sorder=%s' % (self.sort, self.order)
+        self.sort = sort
+        return '?field=%s&sorder=%s' % (self.sort, 'desc' if desc else 'asc')
 
     def get_search_url(self, term, category):
         self.term = term
-        search_url = self.search_url
         search_url = self.search_url + self.term
         if category:
             self.category = category
@@ -96,14 +84,14 @@ class Request(object):
         torrents = response.find_all('tr', class_=['even', 'odd'])
 
         results = []
-        for i, item in enumerate(torrents):
-            title = item.find('a', class_='cellMainLink')
-            tds = item.find_all('td', class_='center')
-            category = self.get_torrent_category(item)
+        for torrent in torrents:
+            title = torrent.find('a', class_='cellMainLink')
+            tds = torrent.find_all('td', class_='center')
+            category = self.get_torrent_category(torrent)
 
-            download_url = item.find('a', title='Verified Torrent').get('href')
-            magnet_url = item.find('a', title='Torrent magnet link').get('href')
-            is_verified = item.find('a', title='Download torrent file') is not None
+            download_url = torrent.find('a', title='Download torrent file').get('href')
+            magnet_url = torrent.find('a', title='Torrent magnet link').get('href')
+            is_verified = torrent.find('a', title='Verified Torrent') is not None
 
             results.append({
                 'title': title.text,
@@ -120,7 +108,7 @@ class Request(object):
             })
         return results
 
-    def get_torrent_category(self, tag, result=None):
+    def get_torrent_category(self, tag):
         """Extract the category from `tag`.
 
         The search page has the torrent category in the url <a href='/tv/'>TV</a>.
@@ -146,12 +134,29 @@ class Request(object):
         return self.torrents[k]
 
 
-def search(term, category=Category.ALL, pages=1, sort=None, order=None):
-    """Returns torrents matching `term` in `category`.
+def search(term, category=Category.ALL, pages=1, sort=SortType.SEED, desc=True):
+    """Returns a list of torrent dictionaries that matches the search criteria.
 
-    Search results can sorted and span multiple pages.
+    When searching for torrents, results can be sorted. See `SortType` for the
+    various ways torrents can be sorted in. By default, torrents are sorted by
+    the seed count in descending order.
+
+    Torrents can also be filtered by their category. By default all categories will
+    be considered. See `Category` for all torrent categories.
+
+    To fetch more than one page of results, update the `pages` value.
+
+    Args:
+        term (str): Torrent search query used to check against torrent titles.
+        category (Optional[str]): Filter the results by this category.
+        pages (Optional[int]): Total number of pages we want to retrieve.
+        sort (Optional[str]): Torrent property to sort based on.
+        desc (Optional[bool]): Sort ordering based on `sort`.
+
+    Returns:
+        list: A list of torrent dictionaries.
 
     """
     request = Request()
-    request.search(term=term, category=category, pages=pages, sort=sort, order=order)
+    request.search(term, category, pages, sort, desc)
     return request
