@@ -1,15 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import bs4
-import requests
+import urllib2
+import gzip
+import StringIO
 
 BASE_URL = 'https://kat.cr/'
 
 
-def _get_soup(page):
-    """Return BeautifulSoup object for given page."""
-    request = requests.get(page)
-    return bs4.BeautifulSoup(request.text)
+def _get_soup(url):
+    """Returns the BeautifulSoup object for given url."""
+    response = urllib2.urlopen(url)
+    response_data = response.read()
+    try:
+        compressed = StringIO.StringIO(response_data)
+        gzipper = gzip.GzipFile(fileobj=compressed)
+        response_data = gzipper.read()
+    except IOError:
+        pass  # The response was not gzipped.
+    return bs4.BeautifulSoup(response_data)
 
 
 class Category(object):
