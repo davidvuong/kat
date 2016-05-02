@@ -11,7 +11,7 @@ kat.py uses [BeautifulSoup](https://www.crummy.com/software/BeautifulSoup/) to s
 ## Installation
 
 ```
-pip install git+git@github.com:davidvuong/kat.git
+pip install git+https://github.com/davidvuong/kat.git
 ```
 
 ## Usage
