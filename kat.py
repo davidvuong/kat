@@ -49,7 +49,11 @@ class Request(object):
 
     def request_page(self, url):
         """Returns the BeautifulSoup object for given url."""
-        response = urllib2.urlopen(url)
+        try:
+            response = urllib2.urlopen(url)
+        except (urllib2.URLError, urllib2.HTTPError):
+            return None  # Connection error or bad query.
+
         response_data = response.read()
         try:
             compressed = StringIO.StringIO(response_data)
@@ -80,10 +84,11 @@ class Request(object):
         the each torrent's details as list of dictionaries.
 
         """
-        response = self.request_page(page_url)
-        torrents = response.find_all('tr', class_=['even', 'odd'])
+        results, response = [], self.request_page(page_url)
+        if not response:
+            return results
 
-        results = []
+        torrents = response.find_all('tr', class_=['even', 'odd'])
         for torrent in torrents:
             title = torrent.find('a', class_='cellMainLink')
             tds = torrent.find_all('td', class_='center')
