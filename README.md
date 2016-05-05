@@ -25,7 +25,7 @@ for torrent in kat.search('the flash'):
     pprint(torrent)
 
 # Retrieves first 5 pages, filtering torrents by category.
-torrents = kat.search('arrow', pages=5, category=kat.CATEGORY.TV)
+torrents = kat.search('arrow', pages=5, category=kat.Category.TV)
 
 # Retrieves sorted results by the leech count (ascending order).
 torrents = kat.search('game of thrones', sort=kat.SortType.LEECH, desc=False)
