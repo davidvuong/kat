@@ -83,10 +83,13 @@ class Request(object):
         Iterates over all table row elements, parses each row and returns
         the each torrent's details as list of dictionaries.
 
+        None is returned if a request error occurred. A list of torrents
+        is returned otherwise.
+
         """
         results, response = [], self.request_page(page_url)
         if not response:
-            return results
+            return None
 
         torrents = response.find_all('tr', class_=['even', 'odd'])
         for torrent in torrents:
