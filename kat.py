@@ -31,7 +31,7 @@ class SortType(object):
 class Request(object):
     """Abstracts the process of searching for torrents on KAT."""
     def __init__(self, base_url=BASE_URL):
-        self.torrents = []
+        self.torrents = None
         self.search_url = base_url + 'usearch/'
 
         self.term = None
@@ -42,9 +42,17 @@ class Request(object):
         """Given a `term` search for matching torrents on KAT."""
         search_url = self.get_search_url(term, category)
         sort_url = self.get_sort_url(sort, desc)
-        for p in xrange(1, pages + 1):
-            endpoint = '%s/%s/%s' % (search_url, p, sort_url)
-            self.torrents += self.get_torrents(endpoint)
+
+        for page in xrange(1, pages + 1):
+            endpoint = '%s/%s/%s' % (search_url, page, sort_url)
+            torrents = self.get_torrents(endpoint)
+            if torrents is None:
+                continue
+
+            # Initialise the `self.torrents` attribute upon success.
+            if torrents and self.torrents is None:
+                self.torrents = []
+            self.torrents += torrents
         return self.torrents
 
     def request_page(self, url):
@@ -132,15 +140,6 @@ class Request(object):
                 return category
         return None
 
-    def __iter__(self):
-        return iter(self.torrents)
-
-    def __len__(self):
-        return len(self.torrents)
-
-    def __getitem__(self, k):
-        return self.torrents[k]
-
 
 def search(term, category=Category.ALL, pages=1, sort=SortType.SEED, desc=True):
     """Returns a list of torrent dictionaries that matches the search criteria.
@@ -166,5 +165,4 @@ def search(term, category=Category.ALL, pages=1, sort=SortType.SEED, desc=True):
 
     """
     request = Request()
-    request.search(term, category, pages, sort, desc)
-    return request
+    return request.search(term, category, pages, sort, desc)
