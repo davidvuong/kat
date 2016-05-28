@@ -105,8 +105,12 @@ class Request(object):
             tds = torrent.find_all('td', class_='center')
             category = self.get_torrent_category(torrent)
 
-            download_url = torrent.find('a', title='Download torrent file').get('href')
-            magnet_url = torrent.find('a', title='Torrent magnet link').get('href')
+            download_ele = torrent.find('a', attrs={'data-download': True})
+            download_url = download_ele.get('href') if download_ele else None
+
+            magnet_ele = torrent.find('a', attrs={'data-nop': True})
+            magnet_url = magnet_ele.get('href') if magnet_ele else None
+
             is_verified = torrent.find('a', title='Verified Torrent') is not None
 
             results.append({
